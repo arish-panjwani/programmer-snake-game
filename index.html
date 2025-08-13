@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programmer Snake Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            background-color: #222;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        #score {
+            color: #fff;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 24px;
+        }
+        canvas {
+            background-color: #111;
+            display: block;
+        }
+        #game-over {
+            color: #ff4444;
+            font-size: 28px;
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <div id="game-over">Game Over! Press Space to Restart</div>
+    </div>
+    <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const cellSize = 20;
+    const rows = canvas.height / cellSize;
+    const cols = canvas.width / cellSize;
+    let snake = [{ x: Math.floor(cols/2), y: Math.floor(rows/2) }];
+    let direction = { x: 0, y: 0 };
+    let food = {};
+    let foodCode = '';
+    // Common HTTP error codes to display as food
+    const errorCodes = ['400','401','403','404','408','418','429','500','501','502','503','504'];
+    let score = 0;
+    let gameOver = false;
+
+    // Load the programmer image. The image is stored in the same directory as this HTML.
+    const img = new Image();
+    // Use a remote public-domain image of a programmer with a laptop. This avoids
+    // needing to host the image separately. If you prefer to host your own image
+    // then adjust this URL or embed a base64 data URI instead.
+    img.src = 'https://freesvg.org/img/thenanobel-programming-17.01-inkscape-svg.png';
+
+    /**
+     * Place food at a random location on the board that does not collide with the snake.
+     */
+    function randomFood() {
+        food = {
+            x: Math.floor(Math.random() * cols),
+            y: Math.floor(Math.random() * rows)
+        };
+        // Ensure food does not spawn on the snake
+        while (snake.some(segment => segment.x === food.x && segment.y === food.y)) {
+            food.x = Math.floor(Math.random() * cols);
+            food.y = Math.floor(Math.random() * rows);
+        }
+        // Pick a random HTTP error code for the food
+        foodCode = errorCodes[Math.floor(Math.random() * errorCodes.length)];
+    }
+
+    /**
+     * Draw everything on the canvas: the error code as food and the snake (programmer image for each segment).
+     */
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw the error code (food)
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(foodCode, food.x * cellSize + cellSize / 2, food.y * cellSize + cellSize / 2);
+        // Draw the snake. Use the programmer image for each segment.
+        snake.forEach((segment, index) => {
+            // Draw the image scaled to the cell size
+            ctx.drawImage(img, segment.x * cellSize, segment.y * cellSize, cellSize, cellSize);
+        });
+    }
+
+    /**
+     * Move the snake forward based on the current direction. Handle collisions and food consumption.
+     */
+    function moveSnake() {
+        const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+        // Check for collisions with walls
+        if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
+            endGame();
+            return;
+        }
+        // Check for collisions with itself
+        if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+            endGame();
+            return;
+        }
+        // Add new head
+        snake.unshift(head);
+        // Check if food is eaten
+        if (head.x === food.x && head.y === food.y) {
+            score++;
+            document.getElementById('score').textContent = 'Score: ' + score;
+            randomFood();
+        } else {
+            // Remove tail if no food eaten
+            snake.pop();
+        }
+    }
+
+    /**
+     * Main game loop. Moves and draws the snake if the game is not over.
+     */
+    function gameLoop() {
+        if (!gameOver) {
+            // If no direction has been chosen yet, simply redraw without moving.
+            if (direction.x === 0 && direction.y === 0) {
+                draw();
+                return;
+            }
+            moveSnake();
+            draw();
+        }
+    }
+
+    /**
+     * Display the game over message and stop the game.
+     */
+    function endGame() {
+        gameOver = true;
+        document.getElementById('game-over').style.display = 'block';
+    }
+
+    /**
+     * Reset the game state to start over.
+     */
+    function resetGame() {
+        snake = [{ x: Math.floor(cols / 2), y: Math.floor(rows / 2) }];
+        direction = { x: 0, y: 0 };
+        score = 0;
+        gameOver = false;
+        document.getElementById('score').textContent = 'Score: 0';
+        document.getElementById('game-over').style.display = 'none';
+        randomFood();
+        draw();
+    }
+
+    // Listen for keyboard input to control the snake. Prevent reversing direction.
+    document.addEventListener('keydown', function (e) {
+        if (gameOver && e.code === 'Space') {
+            resetGame();
+            return;
+        }
+        switch (e.code) {
+            case 'ArrowUp':
+                if (direction.y === 1) break;
+                direction = { x: 0, y: -1 };
+                break;
+            case 'ArrowDown':
+                if (direction.y === -1) break;
+                direction = { x: 0, y: 1 };
+                break;
+            case 'ArrowLeft':
+                if (direction.x === 1) break;
+                direction = { x: -1, y: 0 };
+                break;
+            case 'ArrowRight':
+                if (direction.x === -1) break;
+                direction = { x: 1, y: 0 };
+                break;
+        }
+    });
+
+    // Once the image is loaded, set up the initial game state and start the loop.
+    img.onload = function () {
+        resetGame();
+        setInterval(gameLoop, 120); // The interval controls the snake speed.
+    };
+    </script>
+</body>
+</html>
