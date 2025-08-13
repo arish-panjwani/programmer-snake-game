@@ -6,6 +6,11 @@
 
 ---
 
+## Try it (Live Made by Agent)
+### https://arish-panjwani.github.io/programmer-snake-game/
+
+---
+
 ## Personal Note
 > I was just fascinated by agentic AI and was testing its limits in a good way.
 
