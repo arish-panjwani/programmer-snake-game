@@ -3,202 +3,431 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Programmer Snake Game</title>
+    <!--
+      Debug Dash – race to “eat” errors before they eat you.
+      This enhanced version of the classic snake game introduces a playful debugging theme.
+      The snake is represented by a programmer emoji, error codes are the food, and the
+      game includes modern conveniences like touch controls, pause/reset buttons and
+      wrap‑around edges. The code is modular to aid maintainability.
+    -->
+    <title>Debug Dash – race to “eat” errors before they eat you.</title>
     <style>
+        :root {
+            --primary-color: #007bff;
+            --danger-color: #e74c3c;
+        }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
             background-color: #f5f5f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            min-height: 100vh;
             margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+        h1 {
+            margin-top: 20px;
+            font-size: 2rem;
+        }
+        h2 {
+            margin: 0;
+            font-size: 1rem;
+            color: #666;
+        }
+        #scoreboard {
+            margin-top: 10px;
+            font-size: 1.2rem;
+        }
+        #controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        #controls button {
+            padding: 6px 14px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--primary-color);
+            color: #fff;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #controls button:disabled {
+            background-color: #888;
+            cursor: default;
         }
         #game-container {
-            background-color: #222;
+            margin-top: 10px;
+            background: #222;
             padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
-        #score {
-            color: #fff;
-            margin-bottom: 10px;
-            text-align: center;
-            font-size: 24px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         canvas {
-            background-color: #111;
+            background: #111;
             display: block;
         }
         #game-over {
-            color: #ff4444;
-            font-size: 28px;
+            display: none;
+            color: var(--danger-color);
+            font-size: 1.5rem;
             margin-top: 10px;
             text-align: center;
-            display: none;
+        }
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        #overlay > div {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 80%;
+            max-width: 300px;
+        }
+        #overlay input {
+            width: 100%;
+            padding: 8px;
+            font-size: 1rem;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #overlay button {
+            padding: 6px 12px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--primary-color);
+            color: #fff;
+            cursor: pointer;
+        }
+        /* Mobile responsiveness */
+        @media (max-width: 640px) {
+            h1 { font-size: 1.6rem; }
+            h2 { font-size: 0.9rem; }
+            #game-container {
+                width: 100%;
+                padding: 10px;
+            }
+            #controls button { flex: 1; }
         }
     </style>
 </head>
 <body>
+    <h1>Debug Dash</h1>
+    <h2>race to “eat” errors before they eat you</h2>
+    <div id="scoreboard"></div>
+    <div id="controls">
+        <button id="playBtn">Play</button>
+        <button id="pauseBtn" disabled>Pause</button>
+        <button id="resetBtn">Reset</button>
+    </div>
     <div id="game-container">
-        <div id="score">Score: 0</div>
         <canvas id="gameCanvas" width="600" height="400"></canvas>
-        <div id="game-over">Game Over! Press Space to Restart</div>
+        <div id="game-over"></div>
+    </div>
+    <!-- Overlay for name entry -->
+    <div id="overlay">
+        <div>
+            <h3>Enter your name</h3>
+            <input type="text" id="nameInput" placeholder="Your name" />
+            <button id="startBtn">Start Game</button>
+        </div>
     </div>
     <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const cellSize = 20;
-    const rows = canvas.height / cellSize;
-    const cols = canvas.width / cellSize;
-    let snake = [{ x: Math.floor(cols/2), y: Math.floor(rows/2) }];
-    let direction = { x: 0, y: 0 };
-    let food = {};
-    let foodCode = '';
-    // Common HTTP error codes to display as food
-    const errorCodes = ['400','401','403','404','408','418','429','500','501','502','503','504'];
-    let score = 0;
-    let gameOver = false;
+    (function() {
+        // Canvas and drawing context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        // Game state variables
+        let cellSize = 20;
+        let rows, cols;
+        let snake;
+        let direction;
+        let nextDir;
+        let food;
+        let foodCode;
+        const errorCodes = ['400','401','403','404','408','418','429','500','501','502','503','504'];
+        let score;
+        let intervalId = null;
+        let isPlaying = false;
+        let playerName = '';
+        // Touch tracking
+        let touchStartX = 0;
+        let touchStartY = 0;
+        // DOM references
+        const overlay = document.getElementById('overlay');
+        const nameInput = document.getElementById('nameInput');
+        const startBtn = document.getElementById('startBtn');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const scoreboard = document.getElementById('scoreboard');
+        const gameOverElem = document.getElementById('game-over');
 
-    // Load the programmer image. The image is stored in the same directory as this HTML.
-    const img = new Image();
-    // Use a remote public-domain image of a programmer with a laptop. This avoids
-    // needing to host the image separately. If you prefer to host your own image
-    // then adjust this URL or embed a base64 data URI instead.
-    img.src = 'https://freesvg.org/img/thenanobel-programming-17.01-inkscape-svg.png';
-
-    /**
-     * Place food at a random location on the board that does not collide with the snake.
-     */
-    function randomFood() {
-        food = {
-            x: Math.floor(Math.random() * cols),
-            y: Math.floor(Math.random() * rows)
-        };
-        // Ensure food does not spawn on the snake
-        while (snake.some(segment => segment.x === food.x && segment.y === food.y)) {
-            food.x = Math.floor(Math.random() * cols);
-            food.y = Math.floor(Math.random() * rows);
-        }
-        // Pick a random HTTP error code for the food
-        foodCode = errorCodes[Math.floor(Math.random() * errorCodes.length)];
-    }
-
-    /**
-     * Draw everything on the canvas: the error code as food and the snake (programmer image for each segment).
-     */
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Draw the error code (food)
-        ctx.fillStyle = '#e74c3c';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(foodCode, food.x * cellSize + cellSize / 2, food.y * cellSize + cellSize / 2);
-        // Draw the snake. Use the programmer image for each segment.
-        snake.forEach((segment, index) => {
-            // Draw the image scaled to the cell size
-            ctx.drawImage(img, segment.x * cellSize, segment.y * cellSize, cellSize, cellSize);
-        });
-    }
-
-    /**
-     * Move the snake forward based on the current direction. Handle collisions and food consumption.
-     */
-    function moveSnake() {
-        const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
-        // Check for collisions with walls
-        if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
-            endGame();
-            return;
-        }
-        // Check for collisions with itself
-        if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
-            endGame();
-            return;
-        }
-        // Add new head
-        snake.unshift(head);
-        // Check if food is eaten
-        if (head.x === food.x && head.y === food.y) {
-            score++;
-            document.getElementById('score').textContent = 'Score: ' + score;
+        /**
+         * Initialize or reset the game state.
+         */
+        function resetGame() {
+            // Set responsive dimensions once on each reset
+            resizeCanvas();
+            // Initialize snake at center
+            snake = [ { x: Math.floor(cols / 2), y: Math.floor(rows / 2) } ];
+            direction = { x: 0, y: 0 };
+            nextDir = { x: 0, y: 0 };
+            score = 0;
             randomFood();
-        } else {
-            // Remove tail if no food eaten
-            snake.pop();
-        }
-    }
-
-    /**
-     * Main game loop. Moves and draws the snake if the game is not over.
-     */
-    function gameLoop() {
-        if (!gameOver) {
-            // If no direction has been chosen yet, simply redraw without moving.
-            if (direction.x === 0 && direction.y === 0) {
-                draw();
-                return;
-            }
-            moveSnake();
+            updateScoreboard();
+            gameOverElem.style.display = 'none';
+            playBtn.disabled = false;
+            pauseBtn.disabled = true;
+            // Draw initial state
             draw();
         }
-    }
 
-    /**
-     * Display the game over message and stop the game.
-     */
-    function endGame() {
-        gameOver = true;
-        document.getElementById('game-over').style.display = 'block';
-    }
-
-    /**
-     * Reset the game state to start over.
-     */
-    function resetGame() {
-        snake = [{ x: Math.floor(cols / 2), y: Math.floor(rows / 2) }];
-        direction = { x: 0, y: 0 };
-        score = 0;
-        gameOver = false;
-        document.getElementById('score').textContent = 'Score: 0';
-        document.getElementById('game-over').style.display = 'none';
-        randomFood();
-        draw();
-    }
-
-    // Listen for keyboard input to control the snake. Prevent reversing direction.
-    document.addEventListener('keydown', function (e) {
-        if (gameOver && e.code === 'Space') {
-            resetGame();
-            return;
+        /**
+         * Randomly place food on the board and assign an error code.
+         */
+        function randomFood() {
+            food = {
+                x: Math.floor(Math.random() * cols),
+                y: Math.floor(Math.random() * rows)
+            };
+            // Avoid placing food on the snake
+            while (snake.some(seg => seg.x === food.x && seg.y === food.y)) {
+                food.x = Math.floor(Math.random() * cols);
+                food.y = Math.floor(Math.random() * rows);
+            }
+            foodCode = errorCodes[Math.floor(Math.random() * errorCodes.length)];
         }
-        switch (e.code) {
-            case 'ArrowUp':
-                if (direction.y === 1) break;
-                direction = { x: 0, y: -1 };
-                break;
-            case 'ArrowDown':
-                if (direction.y === -1) break;
-                direction = { x: 0, y: 1 };
-                break;
-            case 'ArrowLeft':
-                if (direction.x === 1) break;
-                direction = { x: -1, y: 0 };
-                break;
-            case 'ArrowRight':
-                if (direction.x === -1) break;
-                direction = { x: 1, y: 0 };
-                break;
-        }
-    });
 
-    // Once the image is loaded, set up the initial game state and start the loop.
-    img.onload = function () {
-        resetGame();
-        setInterval(gameLoop, 120); // The interval controls the snake speed.
-    };
+        /**
+         * Draw the current game state on the canvas.
+         */
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw food code
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold ' + (cellSize - 2) + 'px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(foodCode, food.x * cellSize + cellSize / 2, food.y * cellSize + cellSize / 2);
+            // Draw snake as emoji
+            ctx.fillStyle = '#00bfff';
+            ctx.font = cellSize + 'px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            snake.forEach(seg => {
+                ctx.fillText('👨🏻‍💻', seg.x * cellSize + cellSize / 2, seg.y * cellSize + cellSize / 2 + 2);
+            });
+        }
+
+        /**
+         * Perform one step of movement. Returns true if alive, false if collision.
+         */
+        function moveSnake() {
+            // Always apply any queued direction change before moving.  This allows
+            // the game to start when the player first chooses a direction or the
+            // auto‑start direction.  Without this, the snake never begins
+            // moving because direction stays at {0,0} and the early return
+            // prevents the assignment below from running.
+            if (nextDir.x !== direction.x || nextDir.y !== direction.y) {
+                direction = { x: nextDir.x, y: nextDir.y };
+            }
+            if (direction.x === 0 && direction.y === 0) {
+                // Not moving yet, simply redraw
+                draw();
+                return true;
+            }
+            // Compute new head position with wrap around
+            let newX = (snake[0].x + direction.x + cols) % cols;
+            let newY = (snake[0].y + direction.y + rows) % rows;
+            // Check self collision
+            if (snake.some(seg => seg.x === newX && seg.y === newY)) {
+                return false;
+            }
+            // Insert new head
+            snake.unshift({ x: newX, y: newY });
+            // Check food consumption
+            if (newX === food.x && newY === food.y) {
+                score++;
+                updateScoreboard();
+                randomFood();
+            } else {
+                // Remove tail
+                snake.pop();
+            }
+            return true;
+        }
+
+        /**
+         * Main game loop executed on an interval.
+         */
+        function gameLoop() {
+            if (!moveSnake()) {
+                endGame();
+                return;
+            }
+            draw();
+        }
+
+        /**
+         * Start/resume the game.
+         */
+        function startGame() {
+            if (isPlaying) return;
+            // If direction is idle, set to moving right initially
+            if (direction.x === 0 && direction.y === 0) {
+                nextDir = { x: 1, y: 0 };
+            }
+            isPlaying = true;
+            playBtn.disabled = true;
+            pauseBtn.disabled = false;
+            intervalId = setInterval(gameLoop, 120);
+        }
+
+        /**
+         * Pause the game.
+         */
+        function pauseGame() {
+            if (!isPlaying) return;
+            clearInterval(intervalId);
+            intervalId = null;
+            isPlaying = false;
+            playBtn.disabled = false;
+            pauseBtn.disabled = true;
+        }
+
+        /**
+         * Handle game over: stop loop, show message.
+         */
+        function endGame() {
+            pauseGame();
+            // Show crash message instead of generic game over
+            gameOverElem.textContent = `System crashed because of a ${foodCode}. Try again!`;
+            gameOverElem.style.display = 'block';
+            playBtn.disabled = true;
+            pauseBtn.disabled = true;
+        }
+
+        /**
+         * Update the scoreboard display.
+         */
+        function updateScoreboard() {
+            scoreboard.textContent = `${playerName} — Score: ${score}`;
+        }
+
+        /**
+         * Resize canvas for responsive layouts. Recalculate rows and cols.
+         */
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            const maxWidth = 600;
+            let newWidth = container.clientWidth - 20; // account for padding
+            if (newWidth > maxWidth) newWidth = maxWidth;
+            canvas.width = newWidth;
+            canvas.height = Math.round((newWidth * 2) / 3);
+            // cellSize constant 20; compute grid dims
+            cols = Math.floor(canvas.width / cellSize);
+            rows = Math.floor(canvas.height / cellSize);
+        }
+
+        /**
+         * Handle keyboard input for controlling the snake.
+         */
+        function handleKeydown(e) {
+            switch (e.code) {
+                case 'ArrowUp':
+                    if (direction.y === 1) break;
+                    nextDir = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown':
+                    if (direction.y === -1) break;
+                    nextDir = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft':
+                    if (direction.x === 1) break;
+                    nextDir = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight':
+                    if (direction.x === -1) break;
+                    nextDir = { x: 1, y: 0 };
+                    break;
+                case 'Space':
+                    // quick toggle play/pause
+                    if (isPlaying) pauseGame(); else startGame();
+                    break;
+            }
+        }
+
+        /**
+         * Touch handlers for mobile swipe controls.
+         */
+        function handleTouchStart(e) {
+            const t = e.changedTouches[0];
+            touchStartX = t.clientX;
+            touchStartY = t.clientY;
+        }
+        function handleTouchEnd(e) {
+            const t = e.changedTouches[0];
+            const dx = t.clientX - touchStartX;
+            const dy = t.clientY - touchStartY;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // horizontal swipe
+                if (dx > 0 && direction.x !== -1) {
+                    nextDir = { x: 1, y: 0 };
+                } else if (dx < 0 && direction.x !== 1) {
+                    nextDir = { x: -1, y: 0 };
+                }
+            } else {
+                // vertical swipe
+                if (dy > 0 && direction.y !== -1) {
+                    nextDir = { x: 0, y: 1 };
+                } else if (dy < 0 && direction.y !== 1) {
+                    nextDir = { x: 0, y: -1 };
+                }
+            }
+        }
+
+        /**
+         * Initial setup: attach event handlers and show name overlay.
+         */
+        function init() {
+            startBtn.addEventListener('click', () => {
+                playerName = nameInput.value.trim() || 'Anonymous';
+                overlay.style.display = 'none';
+                resetGame();
+            });
+            playBtn.addEventListener('click', startGame);
+            pauseBtn.addEventListener('click', pauseGame);
+            resetBtn.addEventListener('click', () => {
+                pauseGame();
+                resetGame();
+            });
+            document.addEventListener('keydown', handleKeydown);
+            canvas.addEventListener('touchstart', handleTouchStart, false);
+            canvas.addEventListener('touchend', handleTouchEnd, false);
+        }
+
+        // Kickoff
+        init();
+    })();
     </script>
 </body>
 </html>
